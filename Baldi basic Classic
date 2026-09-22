@@ -1,0 +1,855 @@
+--[[
+    EVIL THE J & BALDI
+    ULTIMATE HUB V4.7
+    ENGLISH EDITION
+
+    Features:
+    - Fly
+    - Mobile Fly
+    - Speed 45
+    - The J Speed 50
+    - Auto Heal
+    - Noclip
+    - Delete Baldi
+    - Restore Baldi
+    - Freeze Baldi
+    - Bring Baldi
+    - Bring All Books
+    - Dynamic Set Books
+    - Aura Kill
+    - ESP Baldi
+    - ESP Playtime
+    - Bring Player
+    - TP To Player
+    - Reset All
+]]
+
+--------------------------------------------------
+-- SERVICES
+--------------------------------------------------
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+--------------------------------------------------
+-- SESSION CLEANUP
+--------------------------------------------------
+
+_G.EvilSessionToken = (_G.EvilSessionToken or 0) + 1
+local Session = _G.EvilSessionToken
+
+if _G.EvilBaldiConnections then
+    for _, Connection in pairs(_G.EvilBaldiConnections) do
+        if typeof(Connection) == "RBXScriptConnection" then
+            pcall(function()
+                Connection:Disconnect()
+            end)
+        end
+    end
+end
+
+_G.EvilBaldiConnections = {}
+
+local Connections = _G.EvilBaldiConnections
+
+local function AddConnection(Connection)
+    table.insert(Connections, Connection)
+    return Connection
+end
+
+--------------------------------------------------
+-- STATES
+--------------------------------------------------
+
+local Flying = false
+local Noclip = false
+
+local BaldiAutoHeal = false
+local TheJAutoHeal = false
+
+local BaldiSpeed = false
+local TheJSpeed = false
+local TheJJump = false
+
+local FreezeBaldi = false
+local AuraKill = false
+
+local ESPBaldi = false
+local ESPPlaytime = false
+
+local MobileUp = false
+local MobileDown = false
+local MobileForward = false
+
+local OriginalWalkSpeed = 16
+local OriginalJumpPower = 50
+local OriginalPlatformStand = false
+
+local FlyVelocity
+local FlyGyro
+
+local NoclipCache = {}
+local FreezeCache = {}
+local HiddenBaldiCache = {}
+
+--------------------------------------------------
+-- CHARACTER HELPERS
+--------------------------------------------------
+
+local function GetCharacter()
+    return LocalPlayer.Character
+end
+
+local function GetHumanoid()
+    local Character = GetCharacter()
+    return Character and Character:FindFirstChildOfClass("Humanoid")
+end
+
+local function GetRoot()
+    local Character = GetCharacter()
+    return Character and Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function UpdateOriginalStats()
+    local Humanoid = GetHumanoid()
+
+    if Humanoid then
+        OriginalWalkSpeed = Humanoid.WalkSpeed
+        OriginalJumpPower = Humanoid.JumpPower
+        OriginalPlatformStand = Humanoid.PlatformStand
+    end
+end
+
+--------------------------------------------------
+-- CHARACTER RESPAWN
+--------------------------------------------------
+
+AddConnection(LocalPlayer.CharacterAdded:Connect(function()
+    Flying = false
+    Noclip = false
+
+    MobileUp = false
+    MobileDown = false
+    MobileForward = false
+
+    table.clear(NoclipCache)
+
+    task.wait(0.5)
+
+    UpdateOriginalStats()
+end))
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local OldGui =
+    LocalPlayer.PlayerGui:FindFirstChild("EvilBaldiV4_7")
+
+if OldGui then
+    OldGui:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "EvilBaldiV4_7"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer.PlayerGui
+
+--------------------------------------------------
+-- MAIN WINDOW
+--------------------------------------------------
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0,390,0,520)
+Main.Position = UDim2.new(0.5,-195,0.5,-260)
+Main.BackgroundColor3 = Color3.fromRGB(25,25,25)
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0,12)
+MainCorner.Parent = Main
+
+local SizeConstraint = Instance.new("UISizeConstraint")
+SizeConstraint.MinSize = Vector2.new(300,400)
+SizeConstraint.MaxSize = Vector2.new(500,650)
+SizeConstraint.Parent = Main
+
+--------------------------------------------------
+-- TITLE
+--------------------------------------------------
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1,0,0,45)
+TitleBar.BackgroundColor3 = Color3.fromRGB(35,35,35)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,-20,1,0)
+Title.Position = UDim2.new(0,10,0,0)
+Title.BackgroundTransparency = 1
+Title.Text = "EVIL THE J & BALDI V4.7"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+
+--------------------------------------------------
+-- OPEN / CLOSE
+--------------------------------------------------
+
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.new(0,110,0,40)
+Toggle.Position = UDim2.new(0,15,0,15)
+Toggle.BackgroundColor3 = Color3.fromRGB(25,25,25)
+Toggle.Text = "EVIL"
+Toggle.TextColor3 = Color3.new(1,1,1)
+Toggle.TextScaled = true
+Toggle.Font = Enum.Font.GothamBold
+Toggle.BorderSizePixel = 0
+Toggle.Parent = ScreenGui
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0,10)
+ToggleCorner.Parent = Toggle
+
+--------------------------------------------------
+-- TABS
+--------------------------------------------------
+
+local TabBar = Instance.new("Frame")
+TabBar.Size = UDim2.new(1,-20,0,40)
+TabBar.Position = UDim2.new(0,10,0,50)
+TabBar.BackgroundTransparency = 1
+TabBar.Parent = Main
+
+local function CreateTab(Text, X)
+
+    local Button = Instance.new("TextButton")
+
+    Button.Size = UDim2.new(0,115,0,35)
+    Button.Position = UDim2.new(0,X,0,0)
+
+    Button.BackgroundColor3 =
+        Color3.fromRGB(50,50,50)
+
+    Button.Text = Text
+    Button.TextColor3 = Color3.new(1,1,1)
+    Button.TextScaled = true
+    Button.Font = Enum.Font.GothamBold
+    Button.BorderSizePixel = 0
+    Button.Parent = TabBar
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0,8)
+    Corner.Parent = Button
+
+    return Button
+end
+
+local BaldiTab = CreateTab("BALDI",0)
+local TheJTab = CreateTab("THE J",125)
+local ExtraTab = CreateTab("EXTRA",250)
+
+--------------------------------------------------
+-- CONTENT FRAMES
+--------------------------------------------------
+
+local function CreateContent(Name,Canvas)
+
+    local Frame = Instance.new("ScrollingFrame")
+
+    Frame.Name = Name
+    Frame.Size = UDim2.new(1,-20,1,-105)
+    Frame.Position = UDim2.new(0,10,0,95)
+
+    Frame.BackgroundTransparency = 1
+    Frame.BorderSizePixel = 0
+
+    Frame.ScrollBarThickness = 5
+    Frame.CanvasSize = UDim2.new(0,0,0,Canvas)
+
+    Frame.Visible = false
+    Frame.Parent = Main
+
+    return Frame
+end
+
+local BaldiContent =
+    CreateContent("BaldiContent",470)
+
+local TheJContent =
+    CreateContent("TheJContent",260)
+
+local ExtraContent =
+    CreateContent("ExtraContent",420)
+
+BaldiContent.Visible = true
+
+--------------------------------------------------
+-- BUTTON CREATOR
+--------------------------------------------------
+
+local function CreateButton(Parent,Text,Y,Callback)
+
+    local Button = Instance.new("TextButton")
+
+    Button.Size = UDim2.new(1,-10,0,38)
+    Button.Position = UDim2.new(0,5,0,Y)
+
+    Button.BackgroundColor3 =
+        Color3.fromRGB(45,45,45)
+
+    Button.TextColor3 =
+        Color3.new(1,1,1)
+
+    Button.Text = Text
+    Button.TextScaled = true
+    Button.Font = Enum.Font.Gotham
+    Button.BorderSizePixel = 0
+    Button.Parent = Parent
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0,8)
+    Corner.Parent = Button
+
+    AddConnection(
+        Button.MouseButton1Click:Connect(function()
+            pcall(Callback,Button)
+        end)
+    )
+
+    return Button
+end
+
+local function SetState(Button,State,Name)
+
+    if not Button then
+        return
+    end
+
+    Button.Text =
+        Name .. (State and " [ON]" or " [OFF]")
+
+    if State then
+        Button.BackgroundColor3 =
+            Color3.fromRGB(0,125,65)
+    else
+        Button.BackgroundColor3 =
+            Color3.fromRGB(45,45,45)
+    end
+end
+
+--------------------------------------------------
+-- FLY
+--------------------------------------------------
+
+local function StopFly()
+
+    Flying = false
+
+    MobileUp = false
+    MobileDown = false
+    MobileForward = false
+
+    if FlyVelocity then
+        pcall(function()
+            FlyVelocity:Destroy()
+        end)
+        FlyVelocity = nil
+    end
+
+    if FlyGyro then
+        pcall(function()
+            FlyGyro:Destroy()
+        end)
+        FlyGyro = nil
+    end
+
+    local Humanoid = GetHumanoid()
+
+    if Humanoid then
+        Humanoid.PlatformStand =
+            OriginalPlatformStand
+    end
+end
+
+local function StartFly()
+
+    local Root = GetRoot()
+    local Humanoid = GetHumanoid()
+
+    if not Root or not Humanoid then
+        return
+    end
+
+    UpdateOriginalStats()
+
+    Flying = true
+
+    FlyVelocity = Instance.new("BodyVelocity")
+    FlyVelocity.MaxForce =
+        Vector3.new(math.huge,math.huge,math.huge)
+
+    FlyVelocity.Velocity = Vector3.zero
+    FlyVelocity.Parent = Root
+
+    FlyGyro = Instance.new("BodyGyro")
+    FlyGyro.MaxTorque =
+        Vector3.new(math.huge,math.huge,math.huge)
+
+    FlyGyro.P = 90000
+    FlyGyro.D = 1000
+    FlyGyro.Parent = Root
+
+    Humanoid.PlatformStand = true
+end
+
+AddConnection(
+    RunService.RenderStepped:Connect(function()
+
+        if not Flying then
+            return
+        end
+
+        local Root = GetRoot()
+        local Camera = Workspace.CurrentCamera
+
+        if not Root
+            or not Camera
+            or not FlyVelocity then
+
+            StopFly()
+            return
+        end
+
+        local Direction = Vector3.zero
+
+        if UserInputService:IsKeyDown(
+            Enum.KeyCode.W
+        ) then
+            Direction += Camera.CFrame.LookVector
+        end
+
+        if UserInputService:IsKeyDown(
+            Enum.KeyCode.S
+        ) then
+            Direction -= Camera.CFrame.LookVector
+        end
+
+        if UserInputService:IsKeyDown(
+            Enum.KeyCode.A
+        ) then
+            Direction -= Camera.CFrame.RightVector
+        end
+
+        if UserInputService:IsKeyDown(
+            Enum.KeyCode.D
+        ) then
+            Direction += Camera.CFrame.RightVector
+        end
+
+        if MobileForward then
+            Direction += Camera.CFrame.LookVector
+        end
+
+        if MobileUp then
+            Direction += Vector3.new(0,1,0)
+        end
+
+        if MobileDown then
+            Direction -= Vector3.new(0,1,0)
+        end
+
+        if Direction.Magnitude > 0 then
+            Direction = Direction.Unit
+        end
+
+        FlyVelocity.Velocity =
+            Direction * 55
+
+        local Look =
+            Vector3.new(
+                Camera.CFrame.LookVector.X,
+                0,
+                Camera.CFrame.LookVector.Z
+            )
+
+        if Look.Magnitude > 0
+            and FlyGyro then
+
+            FlyGyro.CFrame =
+                CFrame.lookAt(
+                    Root.Position,
+                    Root.Position + Look.Unit
+                )
+        end
+    end)
+)
+
+--------------------------------------------------
+-- MOBILE FLY BUTTONS
+--------------------------------------------------
+
+local function CreateMobileButton(Text,Position)
+
+    local Button = Instance.new("TextButton")
+
+    Button.Size = UDim2.new(0,55,0,45)
+    Button.Position = Position
+
+    Button.BackgroundColor3 =
+        Color3.fromRGB(35,35,35)
+
+    Button.TextColor3 =
+        Color3.new(1,1,1)
+
+    Button.Text = Text
+    Button.TextScaled = true
+    Button.Font = Enum.Font.GothamBold
+    Button.BorderSizePixel = 0
+    Button.Visible = false
+    Button.Parent = ScreenGui
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0,10)
+    Corner.Parent = Button
+
+    return Button
+end
+
+local UpButton =
+    CreateMobileButton(
+        "▲",
+        UDim2.new(1,-70,0.55,-100)
+    )
+
+local DownButton =
+    CreateMobileButton(
+        "▼",
+        UDim2.new(1,-70,0.55,-45)
+    )
+
+local ForwardButton =
+    CreateMobileButton(
+        "↑",
+        UDim2.new(1,-125,0.55,-45)
+    )
+
+local StopButton =
+    CreateMobileButton(
+        "■",
+        UDim2.new(1,-70,0.55,10)
+    )
+
+local function HoldButton(Button,Type)
+
+    AddConnection(
+        Button.InputBegan:Connect(function(Input)
+
+            if Input.UserInputType ==
+                Enum.UserInputType.Touch
+                or Input.UserInputType ==
+                Enum.UserInputType.MouseButton1 then
+
+                if Type == "Up" then
+                    MobileUp = true
+
+                elseif Type == "Down" then
+                    MobileDown = true
+
+                elseif Type == "Forward" then
+                    MobileForward = true
+                end
+            end
+        end)
+    )
+
+    AddConnection(
+        Button.InputEnded:Connect(function(Input)
+
+            if Input.UserInputType ==
+                Enum.UserInputType.Touch
+                or Input.UserInputType ==
+                Enum.UserInputType.MouseButton1 then
+
+                if Type == "Up" then
+                    MobileUp = false
+
+                elseif Type == "Down" then
+                    MobileDown = false
+
+                elseif Type == "Forward" then
+                    MobileForward = false
+                end
+            end
+        end)
+    )
+end
+
+HoldButton(UpButton,"Up")
+HoldButton(DownButton,"Down")
+HoldButton(ForwardButton,"Forward")
+
+AddConnection(
+    StopButton.MouseButton1Click:Connect(function()
+        StopFly()
+    end)
+)
+
+local function ShowFlyButtons(State)
+
+    UpButton.Visible = State
+    DownButton.Visible = State
+    ForwardButton.Visible = State
+    StopButton.Visible = State
+end
+
+--------------------------------------------------
+-- NOCLIP
+--------------------------------------------------
+
+local function RestoreNoclip()
+
+    for Part,OldValue in pairs(NoclipCache) do
+
+        if Part and Part.Parent then
+
+            pcall(function()
+                Part.CanCollide = OldValue
+            end)
+        end
+    end
+
+    table.clear(NoclipCache)
+end
+
+AddConnection(
+    RunService.Stepped:Connect(function()
+
+        if not Noclip then
+            return
+        end
+
+        local Character = GetCharacter()
+
+        if not Character then
+            return
+        end
+
+        for _,Part in ipairs(
+            Character:GetDescendants()
+        ) do
+
+            if Part:IsA("BasePart") then
+
+                if NoclipCache[Part] == nil then
+                    NoclipCache[Part] =
+                        Part.CanCollide
+                end
+
+                Part.CanCollide = false
+            end
+        end
+    end)
+)
+
+--------------------------------------------------
+-- BALDI FINDER
+--------------------------------------------------
+
+local function FindBaldi()
+
+    local Result = {}
+
+    for _,Object in ipairs(
+        Workspace:GetDescendants()
+    ) do
+
+        if Object:IsA("Model")
+            and Object.Name:lower():find("baldi") then
+
+            table.insert(Result,Object)
+        end
+    end
+
+    return Result
+end
+
+local function GetModelRoot(Model)
+
+    return Model.PrimaryPart
+        or Model:FindFirstChild(
+            "HumanoidRootPart"
+        )
+        or Model:FindFirstChildWhichIsA(
+            "BasePart",
+            true
+        )
+end
+
+--------------------------------------------------
+-- DELETE / RESTORE BALDI
+--------------------------------------------------
+
+local function HideBaldi()
+
+    for _,Model in ipairs(
+        FindBaldi()
+    ) do
+
+        for _,Part in ipairs(
+            Model:GetDescendants()
+        ) do
+
+            if Part:IsA("BasePart") then
+
+                if HiddenBaldiCache[Part] == nil then
+                    HiddenBaldiCache[Part] =
+                        Part.LocalTransparencyModifier
+                end
+
+                Part.LocalTransparencyModifier = 1
+            end
+        end
+    end
+end
+
+local function RestoreBaldi()
+
+    for Part,OldValue in pairs(
+        HiddenBaldiCache
+    ) do
+
+        if Part and Part.Parent then
+
+            pcall(function()
+                Part.LocalTransparencyModifier =
+                    OldValue
+            end)
+        end
+    end
+
+    table.clear(HiddenBaldiCache)
+end
+
+--------------------------------------------------
+-- FREEZE BALDI
+--------------------------------------------------
+
+local function FreezeBaldiNow()
+
+    FreezeBaldi = true
+
+    for _,Model in ipairs(
+        FindBaldi()
+    ) do
+
+        for _,Part in ipairs(
+            Model:GetDescendants()
+        ) do
+
+            if Part:IsA("BasePart") then
+
+                if FreezeCache[Part] == nil then
+                    FreezeCache[Part] =
+                        Part.Anchored
+                end
+
+                Part.Anchored = true
+            end
+        end
+    end
+end
+
+local function UnfreezeBaldi()
+
+    FreezeBaldi = false
+
+    for Part,OldValue in pairs(
+        FreezeCache
+    ) do
+
+        if Part and Part.Parent then
+
+            pcall(function()
+                Part.Anchored = OldValue
+            end)
+        end
+    end
+
+    table.clear(FreezeCache)
+end
+
+--------------------------------------------------
+-- BRING BALDI
+--------------------------------------------------
+
+local function BringBaldi()
+
+    local Root = GetRoot()
+
+    if not Root then
+        return
+    end
+
+    local Number = 0
+
+    for _,Model in ipairs(
+        FindBaldi()
+    ) do
+
+        local TargetRoot =
+            GetModelRoot(Model)
+
+        if TargetRoot then
+
+            Number += 1
+
+            pcall(function()
+
+                TargetRoot.CFrame =
+                    Root.CFrame *
+                    CFrame.new(
+                        0,
+                        0,
+                        -7 * Number
+                    )
+            end)
+        end
+    end
+end
+
+--------------------------------------------------
+-- NOTEBOOK FINDER
+--------------------------------------------------
+-- IMPORTANT:
+-- A notebook MODEL counts as ONE notebook.
+-- Its internal Parts are NOT counted separately.
+
+local function FindNotebooks()
+
+    local Result = {}
+    local SeenModels = {}
+    local SeenParts = {}
+
+    for _,Object in ipairs(
+        Workspace:GetDescendants()
+    ) do
+
+        --------------------------------------------------
+        -- MODEL NOTEBOOK
+        --------------------------------------------------
+
+        if Object:IsA("Model") then
+
+            local Name =
+                Object.Name:lower()
+
+            if Name:find
